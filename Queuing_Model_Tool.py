@@ -85,7 +85,7 @@ class Station:
             "Utilization (%)": round(utilization * 100, 2),
             "Max Trucks in Storage": max_trucks_in_storage,
             "Avg Trucks in Storage": round(avg_trucks_in_storage, 1),
-            "Mandatory Rest (min)": round(avg_rest, 2),
+            "Time spent in Cooler": round(avg_rest, 2),
             "Bottleneck Wait (min)": round(avg_queue, 2),
             "Total Time in Storage (min)": round(total_time_in_storage, 2),
             "Machine Process Time (min)": round(avg_process, 2),
