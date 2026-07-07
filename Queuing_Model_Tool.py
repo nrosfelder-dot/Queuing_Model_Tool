@@ -109,7 +109,7 @@ st.write("Configure your production flow below. The simulation will calculate ho
 # Sidebar Controls
 st.sidebar.header("1. Global Parameters")
 sim_time = st.sidebar.number_input("Simulation Run Time (minutes)", min_value=100, value=10000, step=1000)
-arrival_mean = st.sidebar.number_input("Mean Time Between Material Arrivals (min)", min_value=0.1, value=2.0, step=0.1)
+arrival_mean = st.sidebar.number_input("Mean Time Spent in Storage (min)", min_value=0.1, value=2.0, step=0.1)
 
 st.sidebar.divider()
 st.sidebar.header("2. Line Configuration")
