@@ -1,9 +1,37 @@
-import simpy
+import importlib
+import io
 import random
 import statistics
+import subprocess
+import sys
+
+
+def ensure_packages():
+    required_packages = ["simpy", "pandas", "streamlit", "xlsxwriter"]
+    missing = []
+
+    for package in required_packages:
+        try:
+            importlib.import_module(package)
+        except ImportError:
+            missing.append(package)
+
+    if missing:
+        print(f"Installing missing packages: {', '.join(missing)}")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", *missing])
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(
+                f"Automatic package installation failed with exit code {exc.returncode}. "
+                f"Please run: pip install {' '.join(missing)}"
+            ) from exc
+
+
+ensure_packages()
+
+import simpy
 import pandas as pd
 import streamlit as st
-import io
 
 # ==========================================
 # SIMULATION BACKEND (SimPy Tandem Line)
