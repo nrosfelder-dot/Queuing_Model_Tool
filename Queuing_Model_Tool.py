@@ -9,55 +9,30 @@ import io
 # SIMULATION BACKEND (SimPy Tandem Line)
 # ==========================================
 class Station:
-    def __init__(self, env, name, capacity, mean_service_time, cooler_time):
+    def __init__(self, env, name, capacity, mean_service_time):
         self.env = env
         self.name = name
         self.capacity = capacity
         self.server = simpy.Resource(env, capacity=capacity)
         self.mean_service_time = mean_service_time
-        self.cooler_time = cooler_time
 
         # Metric Tracking
-        self.cooler_times = []          # Mandatory time truck spends in cooler
-        self.queue_times = []           # Time truck waits in cooler 
-        self.process_times = []         # Time inside the machine
+        self.queue_times = []
+        self.process_times = []
+        self.system_times = []
         self.total_busy_time = 0.0
-        self.total_lbs_processed = 0.0  # Track yield
 
-        # Physical Inventory Tracking
-        self.trucks_in_cooler = 0
-        self.cooler_inventory_log = []
-        self.env.process(self.monitor_cooler())
-
-    def monitor_cooler(self):
-        """Logs the physical number of trucks sitting in the cooler/staging area every minute."""
-        while True:
-            self.cooler_inventory_log.append(self.trucks_in_cooler)
-            yield self.env.timeout(1.0)
-
-    def process_entity(self, entity_name, truck_weight):
+    def process_entity(self, entity_name):
         arrival_time = self.env.now
-        
-        # 1. TRUCK ENTERS COOLER / STAGING
-        self.trucks_in_cooler += 1
-        
-        # 2. MANDATORY COOLER TIME
-        yield self.env.timeout(self.cooler_time)
-        end_cooler_time = self.env.now
-        self.cooler_times.append(end_cooler_time - arrival_time)
 
-        # 3. QUEUE FOR MACHINE (Wait in cooler until a server opens up)
         with self.server.request() as request:
-            yield request 
+            yield request  # Wait in line for an available server
             
-            # 4. TRUCK ENTERS MACHINE (Leaves cooler)
             start_service_time = self.env.now
-            self.trucks_in_cooler -= 1 
-            
-            queue_time = start_service_time - end_cooler_time
+            queue_time = start_service_time - arrival_time
             self.queue_times.append(queue_time)
 
-            # Process the unit
+            # Model service time as an exponential distribution based on the mean
             service_time = random.expovariate(1.0 / self.mean_service_time)
             yield self.env.timeout(service_time)
 
@@ -65,164 +40,186 @@ class Station:
             process_time = end_service_time - start_service_time
             
             self.process_times.append(process_time)
+            self.system_times.append(queue_time + process_time)
             self.total_busy_time += process_time
-            self.total_lbs_processed += truck_weight
 
     def get_metrics(self, total_sim_time):
-        avg_cooler = statistics.mean(self.cooler_times) if self.cooler_times else 0
         avg_queue = statistics.mean(self.queue_times) if self.queue_times else 0
         avg_process = statistics.mean(self.process_times) if self.process_times else 0
-        
-        avg_trucks_in_cooler = statistics.mean(self.cooler_inventory_log) if self.cooler_inventory_log else 0
-        max_trucks_in_cooler = max(self.cooler_inventory_log) if self.cooler_inventory_log else 0
-        
+        avg_system = statistics.mean(self.system_times) if self.system_times else 0
         utilization = self.total_busy_time / (self.capacity * total_sim_time) if total_sim_time > 0 else 0
-        
-        # Total time spent in the physical cooler area (Mandatory + Waiting for machine)
-        total_time_in_cooler = avg_cooler + avg_queue
 
         return {
-            "Stage / Machine": self.name,
-            "Servers": self.capacity,
+            "Station Name": self.name,
+            "Servers Allocated": self.capacity,
+            "Units Processed": len(self.system_times),
             "Utilization (%)": round(utilization * 100, 2),
-            "Max Trucks in Cooler": max_trucks_in_cooler,
-            "Avg Trucks in Cooler": round(avg_trucks_in_cooler, 1),
-            "Mandatory Cooler Time (min)": round(avg_cooler, 2),
-            "Bottleneck Wait (min)": round(avg_queue, 2),
-            "Total Time in Cooler (min)": round(total_time_in_cooler, 2),
-            "Machine Process Time (min)": round(avg_process, 2),
-            "Trucks Completed": len(self.process_times),
-            "Yield (lbs)": round(self.total_lbs_processed, 2)
+            "Mean Time in Queue (min)": round(avg_queue, 2),
+            "Mean Time in Process (min)": round(avg_process, 2),
+            "Mean Total Time in System (min)": round(avg_system, 2)
         }
 
-def entity_generator(env, arrival_mean, avg_truck_weight, stations):
+def entity_generator(env, arrival_mean, stations):
+    """Injects units into the front of the line (Grinder)"""
     entity_count = 0
     while True:
-        # Wait for next truck arrival
         yield env.timeout(random.expovariate(1.0 / arrival_mean))
         entity_count += 1
-        
-        # Generate a truck weight with a slight natural variation (std dev = 5% of mean)
-        truck_weight = max(1.0, random.normalvariate(avg_truck_weight, avg_truck_weight * 0.05))
-        
-        env.process(route_through_line(env, f"Truck-{entity_count}", truck_weight, stations))
+        env.process(route_through_line(env, f"Batch-{entity_count}", stations))
 
-def route_through_line(env, name, truck_weight, stations):
+def route_through_line(env, name, stations):
+    """Sequentially routes the unit from one station directly to the next"""
     for station in stations:
-        yield env.process(station.process_entity(name, truck_weight))
+        yield env.process(station.process_entity(name))
 
-def run_tandem_simulation(sim_time, arrival_mean, avg_truck_weight, station_configs):
+def run_tandem_simulation(sim_time, arrival_mean, station_configs):
     env = simpy.Environment()
-    random.seed(42)
+    random.seed(42)  # Ensures reproducible results across runs
 
+    # Construct the sequential network dynamically from UI inputs
     stations_list = []
     for config in station_configs:
         stations_list.append(
-            Station(env, config["name"], config["capacity"], config["service_time"], config["cooler_time"])
+            Station(env, config["name"], config["capacity"], config["service_time"])
         )
 
-    env.process(entity_generator(env, arrival_mean, avg_truck_weight, stations_list))
+    # Start the entry-point generator
+    env.process(entity_generator(env, arrival_mean, stations_list))
     env.run(until=sim_time)
-    
-    return pd.DataFrame([station.get_metrics(sim_time) for station in stations_list])
+
+    # Compile data
+    results = [station.get_metrics(sim_time) for station in stations_list]
+    return pd.DataFrame(results)
 
 # ==========================================
 # INTERACTIVE USER INTERFACE (Streamlit)
 # ==========================================
-st.set_page_config(page_title="Jack Links Process Flow Simulation", layout="wide")
-
-st.title("Line Simulator")
-st.write("Configure your production flow below. The model tracks yield (lbs), cooler times, and bottlenecks.")
-st.write("Using mean times, input data into the individual stations in order to see process statistics")
+st.set_page_config(page_title="Tandem Line Simulation", layout="wide")
 
 # Sidebar Controls
-st.sidebar.header("1. Global Run Parameters")
-sim_time = st.sidebar.number_input("Total Simulation Run Time (minutes)", min_value=60, value=10000, step=1000)
+st.sidebar.header("1. Global Parameters")
+sim_time = st.sidebar.number_input("Simulation Run Time (minutes)", min_value=100, value=10000, step=1000)
+arrival_mean = st.sidebar.number_input("Mean Time Between Material Arrivals (minutes)", min_value=0.1, value=2.0, step=0.1, format="%.2f")
 
 st.sidebar.divider()
-st.sidebar.header("2. Truck Parameters")
-arrival_mean = st.sidebar.number_input("Mean Time Between Truck Arrivals (min)", min_value=0.1, value=5.0, step=0.5)
-avg_truck_weight = st.sidebar.number_input("Average Truck Weight (lbs)", min_value=50, value=400, step=50)
+st.sidebar.header("2. Line Configuration")
+num_stations = st.sidebar.number_input("Number of Stations in Sequence", min_value=1, max_value=10, value=6)
 
 st.sidebar.divider()
-st.sidebar.header("3. Line Configuration")
-num_stations = st.sidebar.number_input("Number of Stages", min_value=1, max_value=10, value=6)
+st.sidebar.header("3. Appearance")
+font_family = st.sidebar.selectbox(
+    "Font Family",
+    ["Arial", "Verdana", "Georgia", "Times New Roman", "Monospace"],
+    index=1,
+)
+font_size = st.sidebar.slider("Base Font Size", min_value=12, max_value=24, value=16, step=1)
 
-default_names = ["Grinder", "Stuffer", "Smoker", "Stick Cutter", "Packing Lines", "Box Lines"]
+st.markdown(
+    f"""
+    <style>
+    :root {{
+        --app-font-family: {font_family};
+        --app-font-size: {font_size}px;
+    }}
+    .stApp {{
+        background-color: #E02B27;
+        font-family: var(--app-font-family);
+        font-size: var(--app-font-size);
+    }}
+    [data-testid="stSidebar"] {{
+        background-color: #e5e7eb;
+        font-family: var(--app-font-family);
+        font-size: calc(var(--app-font-size) - 1px);
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.title("Sequential Production Line Queuing Model")
+st.write("Configure a multi-station linear production flow below to evaluate capacity constraints and process metrics.")
+st.write("Using mean times, input data into the individual stations in order to see process statistics")
+
+# Pre-defined defaults matching your physical plant setup
+default_names = ["Grinder", "Stuffer", "Oven", "Cutter", "Packing Lines", "Box Lines"]
 default_servers = [1, 1, 2, 1, 3, 1]
-default_service_times = [4.5, 3.2, 35.0, 2.8, 12.5, 4.0]
-default_cooler_times = [0.0, 15.0, 0.0, 120.0, 0.0, 0.0] # E.g., chill for 120 mins before cutting
+default_service_times = [1.5, 1.2, 3.0, 0.8, 4.5, 1.0]
 
 station_configs = []
 
-st.subheader("Stage Parameters")
+st.subheader("Station Parameters")
+st.write("Define server capacities and mean internal processing times for each point along the sequence:")
+
+# Generate layout dynamically using columns
 for i in range(num_stations):
-    d_name = default_names[i] if i < len(default_names) else f"Stage {i+1}"
+    # Fallback to generic naming if user scales beyond the initial 6 default stations
+    d_name = default_names[i] if i < len(default_names) else f"Station {i+1}"
     d_server = default_servers[i] if i < len(default_servers) else 1
-    d_time = default_service_times[i] if i < len(default_service_times) else 5.0
-    d_cooler = default_cooler_times[i] if i < len(default_cooler_times) else 0.0
+    d_time = default_service_times[i] if i < len(default_service_times) else 2.0
 
     with st.container():
-        c1, c2, c3, c4 = st.columns([2, 1, 1.5, 1.5])
+        c1, c2, c3 = st.columns([2, 1, 1])
         with c1:
-            name = st.text_input(f"Stage {i+1} Name", value=d_name, key=f"name_{i}")
+            name = st.text_input(f"Station {i+1} Name", value=d_name, key=f"name_{i}")
         with c2:
-            servers = st.number_input("Machines", min_value=1, value=d_server, key=f"srv_{i}")
+            servers = st.number_input("Active Servers / Lines", min_value=1, value=d_server, key=f"srv_{i}")
         with c3:
-            cooler_time = st.number_input("Cooler Time (min)", min_value=0.0, value=d_cooler, step=5.0, key=f"cooler_{i}")
-        with c4:
-            svc_time = st.number_input("Machine Cycle (min)", min_value=0.05, value=d_time, step=0.5, key=f"time_{i}")
-            
+            svc_time = st.number_input("Mean Service Time (min)", min_value=0.05, value=d_time, step=0.1, format="%.2f", key=f"time_{i}")
+        
         station_configs.append({
-            "name": name, 
-            "capacity": servers, 
-            "service_time": svc_time,
-            "cooler_time": cooler_time
+            "name": name,
+            "capacity": servers,
+            "service_time": svc_time
         })
     st.divider()
 
+# Execution and Reporting
 if st.button("Run Production Simulation", type="primary"):
     with st.spinner('Simulating processing line dynamics...'):
-        df_results = run_tandem_simulation(sim_time, arrival_mean, avg_truck_weight, station_configs)
+        df_results = run_tandem_simulation(sim_time, arrival_mean, station_configs)
         
-        st.subheader("📊 Output Performance & Cooler Summary")
-        
-        # Format the dataframe display to look nicer (adding commas to Yield)
-        st.dataframe(
-            df_results.style.format({"Yield (lbs)": "{:,.2f}"}), 
-            use_container_width=True, 
-            hide_index=True
-        )
+        st.subheader("📊 Output Performance Summary")
+        st.dataframe(df_results, use_container_width=True, hide_index=True)
 
-        # Highlight bottlenecks
+        # Highlight severe bottlenecks visually
         overutilized = df_results[df_results["Utilization (%)"] >= 100.0]
         if not overutilized.empty:
             for _, row in overutilized.iterrows():
-                st.error(f"**{row['Stage / Machine']}** is completely bottlenecked. The upstream cooler area will overflow infinitely because the machine cannot keep up with the trucks coming in.")
+                st.error(f"**{row['Station Name']}** is completely bottlenecked (Utilization ≥ 100%). Downstream stations will starve, and upstream queues will grow infinitely.")
 
-        # Excel Export
+        # Construct highly-formatted in-memory Excel file
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-            df_results.to_excel(writer, index=False, sheet_name='Metrics')
-            worksheet = writer.sheets['Metrics']
+            df_results.to_excel(writer, index=False, sheet_name='Line Performance Metrics')
             
-            header_format = writer.book.add_format({'bold': True, 'bg_color': '#1F4E78', 'font_color': 'white', 'border': 1, 'text_wrap': True})
-            cell_format = writer.book.add_format({'align': 'center', 'border': 1})
-            yield_format = writer.book.add_format({'align': 'center', 'border': 1, 'num_format': '#,##0.00'})
+            workbook  = writer.book
+            worksheet = writer.sheets['Line Performance Metrics']
             
+            # Professional formatting layouts
+            header_format = workbook.add_format({
+                'bold': True, 'text_wrap': True, 'valign': 'vcenter', 'align': 'center',
+                'fg_color': '#1F4E78', 'font_color': 'white', 'border': 1
+            })
+            cell_format = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1})
+            alert_format = workbook.add_format({'bg_color': '#FFC7CE', 'font_color': '#9C0006', 'align': 'center', 'border': 1})
+
+            # Overwrite header styling
             for col_num, value in enumerate(df_results.columns.values):
                 worksheet.write(0, col_num, value, header_format)
                 
+            # Apply widths and basic alignments
             for i, col in enumerate(df_results.columns):
-                column_len = max(df_results[col].astype(str).map(len).max(), len(col)) + 2
-                if col == "Yield (lbs)":
-                    worksheet.set_column(i, i, column_len, yield_format)
-                else:
-                    worksheet.set_column(i, i, column_len, cell_format)
+                column_len = max(df_results[col].astype(str).map(len).max(), len(col)) + 4
+                worksheet.set_column(i, i, column_len, cell_format)
+
+            # Conditional Formatting: Highlight any utilization exceeding 85%
+            worksheet.conditional_format(1, 3, len(df_results), 3, {
+                'type': 'cell', 'criteria': '>=', 'value': 85, 'format': alert_format
+            })
 
         st.download_button(
             label="Export Styled Report to Excel",
             data=buffer.getvalue(),
-            file_name="food_processing_metrics.xlsx",
+            file_name="production_line_metrics.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
