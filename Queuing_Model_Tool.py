@@ -141,7 +141,7 @@ with header_col:
 
 with logo_col:
     # Replace "your_logo.png" with the actual path to your image file, or a direct URL
-    st.image("https://banner2.cleanpng.com/20180420/ljq/avfwc1m5u.webp", width=240)
+    st.image("Jack_Links_Logo.png", width=240)
     
 # Pre-defined defaults matching your physical plant setup
 default_names = ["Grinder", "Stuffer", "Oven", "Cutter", "Packing Lines", "Box Lines"]
@@ -181,7 +181,7 @@ if st.button("Run Production Simulation", type="primary"):
     with st.spinner('Simulating processing line dynamics...'):
         df_results = run_tandem_simulation(sim_time, arrival_mean, station_configs)
         
-        st.subheader("📊 Output Performance Summary")
+        st.subheader("Output Performance Summary")
         st.dataframe(df_results, use_container_width=True, hide_index=True)
 
         # Highlight severe bottlenecks visually
