@@ -132,7 +132,7 @@ st.markdown(
 )
 
 # Create two columns: a wide one for text (ratio 5), and a narrow one for the logo (ratio 1)
-header_col, logo_col = st.columns([5, 1])
+header_col, logo_col = st.columns([4, 2])
 
 with header_col:
     st.title("Sequential Production Line Queuing Model")
@@ -141,7 +141,7 @@ with header_col:
 
 with logo_col:
     # Replace "your_logo.png" with the actual path to your image file, or a direct URL
-    st.image("Jack_Links_Logo.png", width=480)
+    st.image("Jack_Links_Logo.png", width=700)
     
 # Pre-defined defaults matching your physical plant setup
 default_names = ["Grinder", "Stuffer", "Oven", "Cutter", "Packing Lines", "Box Lines"]
