@@ -18,8 +18,8 @@ class Station:
         self.cooler_time = cooler_time
 
         # Metric Tracking
-        self.cooler_times = []          # Mandatory time truck HAS to spend in cooler
-        self.queue_times = []           # Time truck waits in cooler AFTER mandatory time because machine is busy
+        self.cooler_times = []          # Mandatory time truck spends in cooler
+        self.queue_times = []           # Time truck waits in cooler 
         self.process_times = []         # Time inside the machine
         self.total_busy_time = 0.0
         self.total_lbs_processed = 0.0  # Track yield
@@ -129,14 +129,15 @@ def run_tandem_simulation(sim_time, arrival_mean, avg_truck_weight, station_conf
 # ==========================================
 # INTERACTIVE USER INTERFACE (Streamlit)
 # ==========================================
-st.set_page_config(page_title="Food Processing Simulation", layout="wide")
+st.set_page_config(page_title="Jack Links Process Flow Simulation", layout="wide")
 
-st.title("🏭 Food Processing Line Simulator")
-st.write("Configure your production flow below. The model tracks yield (lbs), mandatory cooler times, and bottlenecks.")
+st.title("Line Simulator")
+st.write("Configure your production flow below. The model tracks yield (lbs), cooler times, and bottlenecks.")
+st.write("Using mean times, input data into the individual stations in order to see process statistics")
 
 # Sidebar Controls
 st.sidebar.header("1. Global Run Parameters")
-sim_time = st.sidebar.number_input("Simulation Run Time (minutes)", min_value=100, value=10000, step=1000)
+sim_time = st.sidebar.number_input("Total Simulation Run Time (minutes)", min_value=60, value=10000, step=1000)
 
 st.sidebar.divider()
 st.sidebar.header("2. Truck Parameters")
@@ -147,7 +148,7 @@ st.sidebar.divider()
 st.sidebar.header("3. Line Configuration")
 num_stations = st.sidebar.number_input("Number of Stages", min_value=1, max_value=10, value=6)
 
-default_names = ["Grinder", "Stuffer", "Oven", "Cutter", "Packing Lines", "Box Lines"]
+default_names = ["Grinder", "Stuffer", "Smoker", "Stick Cutter", "Packing Lines", "Box Lines"]
 default_servers = [1, 1, 2, 1, 3, 1]
 default_service_times = [4.5, 3.2, 35.0, 2.8, 12.5, 4.0]
 default_cooler_times = [0.0, 15.0, 0.0, 120.0, 0.0, 0.0] # E.g., chill for 120 mins before cutting
@@ -180,7 +181,7 @@ for i in range(num_stations):
         })
     st.divider()
 
-if st.button("🚀 Run Production Simulation", type="primary"):
+if st.button("Run Production Simulation", type="primary"):
     with st.spinner('Simulating processing line dynamics...'):
         df_results = run_tandem_simulation(sim_time, arrival_mean, avg_truck_weight, station_configs)
         
@@ -197,7 +198,7 @@ if st.button("🚀 Run Production Simulation", type="primary"):
         overutilized = df_results[df_results["Utilization (%)"] >= 100.0]
         if not overutilized.empty:
             for _, row in overutilized.iterrows():
-                st.error(f"⚠️ **{row['Stage / Machine']}** is completely bottlenecked. The upstream cooler area will overflow infinitely because the machine cannot keep up with the trucks coming in.")
+                st.error(f"**{row['Stage / Machine']}** is completely bottlenecked. The upstream cooler area will overflow infinitely because the machine cannot keep up with the trucks coming in.")
 
         # Excel Export
         buffer = io.BytesIO()
@@ -220,7 +221,7 @@ if st.button("🚀 Run Production Simulation", type="primary"):
                     worksheet.set_column(i, i, column_len, cell_format)
 
         st.download_button(
-            label="📥 Export Styled Report to Excel",
+            label="Export Styled Report to Excel",
             data=buffer.getvalue(),
             file_name="food_processing_metrics.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
