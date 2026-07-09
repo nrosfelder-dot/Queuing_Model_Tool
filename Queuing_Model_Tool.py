@@ -122,7 +122,7 @@ st.markdown(
         font-size: var(--app-font-size);
     }
     [data-testid="stSidebar"] {
-        background-color: #e5e7eb;
+        background-color: #000000;
         font-family: var(--app-font-family);
         font-size: calc(var(--app-font-size) - 1px);
     }
