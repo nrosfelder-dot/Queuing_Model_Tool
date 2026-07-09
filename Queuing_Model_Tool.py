@@ -75,8 +75,7 @@ def route_through_line(env, name, stations):
 def run_tandem_simulation(sim_time, arrival_mean, station_configs):
     env = simpy.Environment()
     
-    # Removed the hardcoded random.seed(42) to ensure natural stochastic variance on each run
-
+   
     # Construct the sequential network dynamically from UI inputs
     stations_list = []
     for config in station_configs:
@@ -110,7 +109,6 @@ st.sidebar.divider()
 
 font_size = st.sidebar.slider("Base Font Size", min_value=12, max_value=24, value=16, step=1)
 
-# Fixed the f-string interpolation for font-family and font-size
 st.markdown(
     f"""
     <style>
@@ -119,12 +117,12 @@ st.markdown(
         --app-font-size: {font_size}px;
     }}
     .stApp {{
-        background-color: #E02B27;
+        background-color: #DC143C;
         font-family: var(--app-font-family);
         font-size: var(--app-font-size);
     }}
     [data-testid="stSidebar"] {{
-        background-color: #e5e7eb;
+        background-color: #000000;
         font-family: var(--app-font-family);
         font-size: calc(var(--app-font-size) - 1px);
     }}
@@ -195,7 +193,7 @@ if st.button("Run Production Simulation", type="primary"):
             # Professional formatting layouts
             header_format = workbook.add_format({
                 'bold': True, 'text_wrap': True, 'valign': 'vcenter', 'align': 'center',
-                'fg_color': '#1F4E78', 'font_color': 'white', 'border': 1
+                'fg_color': '#111111', 'font_color': 'white', 'border': 1
             })
             cell_format = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1})
             alert_format = workbook.add_format({'bg_color': '#FFC7CE', 'font_color': '#9C0006', 'align': 'center', 'border': 1})
