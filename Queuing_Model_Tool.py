@@ -107,7 +107,7 @@ num_stations = st.sidebar.number_input("Number of Stations in Sequence", min_val
 
 st.sidebar.divider()
 
-font_size = st.sidebar.slider("Base Font Size", min_value=12, max_value=24, value=16, step=1)
+font_size = 16
 
 st.markdown(
     f"""
