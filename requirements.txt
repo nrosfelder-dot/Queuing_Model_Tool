@@ -1,3 +1,4 @@
 simpy==4.1.2
 xlsxwriter==3.2.9
 pandas
+streamlit
