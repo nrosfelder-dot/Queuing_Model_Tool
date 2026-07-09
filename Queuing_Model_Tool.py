@@ -132,7 +132,7 @@ st.markdown(
 )
 
 # Create two columns: a wide one for text (ratio 5), and a narrow one for the logo (ratio 1)
-header_col, logo_col = st.columns([4, 2])
+header_col, logo_col = st.columns([6, 1])
 
 with header_col:
     st.title("Sequential Production Line Queuing Model")
