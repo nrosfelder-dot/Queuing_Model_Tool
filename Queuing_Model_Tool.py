@@ -106,20 +106,15 @@ st.sidebar.header("2. Line Configuration")
 num_stations = st.sidebar.number_input("Number of Stations in Sequence", min_value=1, max_value=10, value=6)
 
 st.sidebar.divider()
-st.sidebar.header("3. Appearance")
-font_family = st.sidebar.selectbox(
-    "Font Family",
-    ["Arial", "Verdana", "Georgia", "Times New Roman", "Monospace"],
-    index=1,
-)
+
 font_size = st.sidebar.slider("Base Font Size", min_value=12, max_value=24, value=16, step=1)
 
 st.markdown(
     f"""
     <style>
     :root {{
-        --app-font-family: {font_family};
-        --app-font-size: {font_size}px;
+        --app-font-family: {Verdana};
+        --app-font-size: {16}px;
     }}
     .stApp {{
         background-color: #E02B27;
