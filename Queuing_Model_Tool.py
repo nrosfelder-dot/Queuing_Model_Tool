@@ -74,7 +74,8 @@ def route_through_line(env, name, stations):
 
 def run_tandem_simulation(sim_time, arrival_mean, station_configs):
     env = simpy.Environment()
-    random.seed(42)  # Ensures reproducible results across runs
+    
+    # Removed the hardcoded random.seed(42) to ensure natural stochastic variance on each run
 
     # Construct the sequential network dynamically from UI inputs
     stations_list = []
@@ -109,12 +110,13 @@ st.sidebar.divider()
 
 font_size = st.sidebar.slider("Base Font Size", min_value=12, max_value=24, value=16, step=1)
 
+# Fixed the f-string interpolation for font-family and font-size
 st.markdown(
     f"""
     <style>
     :root {{
-        --app-font-family: {Verdana};
-        --app-font-size: {16}px;
+        --app-font-family: Verdana, sans-serif;
+        --app-font-size: {font_size}px;
     }}
     .stApp {{
         background-color: #E02B27;
