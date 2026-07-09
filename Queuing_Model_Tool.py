@@ -117,7 +117,7 @@ st.markdown(
         --app-font-size: {font_size}px;
     }}
     .stApp {{
-        background-color: #DC143C;
+        background-color: #FFC7CE;
         font-family: var(--app-font-family);
         font-size: var(--app-font-size);
     }}
