@@ -110,27 +110,27 @@ st.sidebar.divider()
 font_size = 16
 
 st.markdown(
-    f"""
+    """
     <style>
-    :root {{
+    :root {
         --app-font-family: Verdana, sans-serif;
-        --app-font-size: {font_size}px;
-    }}
+        --app-font-size: 16px;
+    }
     .stApp {
-        background-color: #E02A27;
+        background-color: #E02B27;
         font-family: var(--app-font-family);
         font-size: var(--app-font-size);
-    }}
-    [data-testid="stSidebar"] {{
-        background-color: #000000;
+    }
+    [data-testid="stSidebar"] {
+        background-color: #e5e7eb;
         font-family: var(--app-font-family);
         font-size: calc(var(--app-font-size) - 1px);
-    }}
-
-    /* NEW: Target the image in the second column and pull it upward */
-    [data-testid="column"]:nth-of-type(2) [data-testid="stImage"] {{
+    }
+    
+    /* Pulls the logo upward */
+    [data-testid="column"]:nth-of-type(2) [data-testid="stImage"] {
         margin-top: -60px; 
-    }}
+    }
     </style>
     """,
     unsafe_allow_html=True,
