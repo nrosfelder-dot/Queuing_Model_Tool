@@ -116,7 +116,7 @@ st.markdown(
         --app-font-family: Verdana, sans-serif;
         --app-font-size: {font_size}px;
     }}
-    .stApp {{
+    .stApp {
         background-color: #E02A27;
         font-family: var(--app-font-family);
         font-size: var(--app-font-size);
@@ -125,12 +125,12 @@ st.markdown(
         background-color: #000000;
         font-family: var(--app-font-family);
         font-size: calc(var(--app-font-size) - 1px);
-    }
+    }}
 
     /* NEW: Target the image in the second column and pull it upward */
-    [data-testid="column"]:nth-of-type(2) [data-testid="stImage"] {
+    [data-testid="column"]:nth-of-type(2) [data-testid="stImage"] {{
         margin-top: -60px; 
-    }
+    }}
     </style>
     """,
     unsafe_allow_html=True,
