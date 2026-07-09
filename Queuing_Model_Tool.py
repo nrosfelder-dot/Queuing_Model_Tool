@@ -141,7 +141,7 @@ with header_col:
 
 with logo_col:
     # Replace "your_logo.png" with the actual path to your image file, or a direct URL
-    st.image("Jack_Links_Logo.png", width=240)
+    st.image("Jack_Links_Logo.png", width=480)
     
 # Pre-defined defaults matching your physical plant setup
 default_names = ["Grinder", "Stuffer", "Oven", "Cutter", "Packing Lines", "Box Lines"]
