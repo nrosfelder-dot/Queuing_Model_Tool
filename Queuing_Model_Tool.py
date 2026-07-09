@@ -131,10 +131,18 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.title("Sequential Production Line Queuing Model")
-st.write("Configure a multi-station linear production flow below to evaluate capacity constraints and process metrics.")
-st.write("Using mean times, input data into the individual stations in order to see process statistics")
+# Create two columns: a wide one for text (ratio 5), and a narrow one for the logo (ratio 1)
+header_col, logo_col = st.columns([5, 1])
 
+with header_col:
+    st.title("Sequential Production Line Queuing Model")
+    st.write("Configure a multi-station linear production flow below to evaluate capacity constraints and process metrics.")
+    st.write("Using mean times, input data into the individual stations in order to see process statistics")
+
+with logo_col:
+    # Replace "your_logo.png" with the actual path to your image file, or a direct URL
+    st.image("https://banner2.cleanpng.com/20180420/ljq/avfwc1m5u.webp", width=120)
+    
 # Pre-defined defaults matching your physical plant setup
 default_names = ["Grinder", "Stuffer", "Oven", "Cutter", "Packing Lines", "Box Lines"]
 default_servers = [1, 1, 2, 1, 3, 1]
