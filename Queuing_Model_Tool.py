@@ -270,7 +270,7 @@ if st.button("Run Production Simulation", type="primary"):
 
         # Show Breakdown Analysis grouped by Station if data was generated
         if not df_breakdowns.empty:
-            st.subheader("Unplanned Downtime Events Logged")
+            st.subheader("Predicted Unplanned Downtime Events Logged for Simulation Runtime")
             
             # Aggregate breakdowns by Station and Cause
             summary_dt = df_breakdowns.groupby(["Station", "Cause"]).agg(
