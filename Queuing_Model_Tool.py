@@ -6,21 +6,43 @@ import streamlit as st
 import io
 
 # ==========================================
-# SIMULATION BACKEND (SimPy Tandem Line)
+# SIMULATION BACKEND 
 # ==========================================
 class Station:
-    def __init__(self, env, name, capacity, mean_service_time):
+    def __init__(self, env, name, capacity, mean_service_time, downtime_enabled=False, downtime_interval=240.0, downtime_duration=30.0):
         self.env = env
         self.name = name
         self.capacity = capacity
         self.server = simpy.Resource(env, capacity=capacity)
         self.mean_service_time = mean_service_time
+        
+        # Periodic Downtime Parameters (e.g., Washdowns, Shift Changes)
+        self.downtime_enabled = downtime_enabled
+        self.downtime_interval = downtime_interval
+        self.downtime_duration = downtime_duration
 
         # Metric Tracking
         self.queue_times = []
         self.process_times = []
         self.system_times = []
         self.total_busy_time = 0.0
+
+        # Start the background downtime clock if enabled
+        if self.downtime_enabled:
+            self.env.process(self.scheduled_downtime_cycle())
+
+    def scheduled_downtime_cycle(self):
+        """Runs in the background and periodically locks the station for maintenance/cleaning."""
+        while True:
+            # Wait for the next scheduled washdown/downtime event
+            yield self.env.timeout(self.downtime_interval)
+            
+            # Request the server. It will wait for the current active batch to finish, 
+            # then lock the machine, forcing the queue to build up.
+            with self.server.request() as request:
+                yield request
+                # Machine is offline for the specified duration
+                yield self.env.timeout(self.downtime_duration)
 
     def process_entity(self, entity_name):
         arrival_time = self.env.now
@@ -32,7 +54,7 @@ class Station:
             queue_time = start_service_time - arrival_time
             self.queue_times.append(queue_time)
 
-            # Model service time as an exponential distribution based on the mean
+            # Normal Processing Time (Exponentially distributed based on mean)
             service_time = random.expovariate(1.0 / self.mean_service_time)
             yield self.env.timeout(service_time)
 
@@ -59,32 +81,44 @@ class Station:
             "Mean Total Time in System (min)": round(avg_system, 2)
         }
 
-def entity_generator(env, arrival_mean, stations):
-    """Injects units into the front of the line (Grinder)"""
+def route_through_line(env, name, stations, scrap_rate):
+    """Sequentially routes the unit, applying a scrap/waste probability at each stage."""
+    for station in stations:
+        # Process the entity at the current station
+        yield env.process(station.process_entity(name))
+        
+        # Probabilistic routing: Check if the unit is scrapped (food waste)
+        if random.random() < scrap_rate:
+            break  # Entity is wasted and exits the simulation early
+
+def entity_generator(env, arrival_mean, stations, scrap_rate):
+    """Injects units into the front of the line."""
     entity_count = 0
     while True:
         yield env.timeout(random.expovariate(1.0 / arrival_mean))
         entity_count += 1
-        env.process(route_through_line(env, f"Batch-{entity_count}", stations))
+        env.process(route_through_line(env, f"Batch-{entity_count}", stations, scrap_rate))
 
-def route_through_line(env, name, stations):
-    """Sequentially routes the unit from one station directly to the next"""
-    for station in stations:
-        yield env.process(station.process_entity(name))
-
-def run_tandem_simulation(sim_time, arrival_mean, station_configs):
+def run_tandem_simulation(sim_time, arrival_mean, station_configs, scrap_rate, downtime_enabled, downtime_interval, downtime_duration):
     env = simpy.Environment()
     
-   
     # Construct the sequential network dynamically from UI inputs
     stations_list = []
     for config in station_configs:
         stations_list.append(
-            Station(env, config["name"], config["capacity"], config["service_time"])
+            Station(
+                env, 
+                config["name"], 
+                config["capacity"], 
+                config["service_time"],
+                downtime_enabled,
+                downtime_interval,
+                downtime_duration
+            )
         )
 
     # Start the entry-point generator
-    env.process(entity_generator(env, arrival_mean, stations_list))
+    env.process(entity_generator(env, arrival_mean, stations_list, scrap_rate))
     env.run(until=sim_time)
 
     # Compile data
@@ -94,21 +128,44 @@ def run_tandem_simulation(sim_time, arrival_mean, station_configs):
 # ==========================================
 # INTERACTIVE USER INTERFACE (Streamlit)
 # ==========================================
-st.set_page_config(page_title="Tandem Line Simulation", layout="wide")
+st.set_page_config(page_title="Production Line Simulation", layout="wide")
 
-# Sidebar Controls
+# ----------------- SIDEBAR -----------------
 st.sidebar.header("1. Global Parameters")
 sim_time = st.sidebar.number_input("Simulation Run Time (minutes)", min_value=100, value=10000, step=1000)
-arrival_mean = st.sidebar.number_input("Mean Time Between Material Arrivals (minutes)", min_value=0.1, value=2.0, step=0.1, format="%.2f")
+arrival_mean = st.sidebar.number_input("Mean Time Between Material Arrivals (min)", min_value=0.1, value=2.0, step=0.1, format="%.2f")
 
 st.sidebar.divider()
 st.sidebar.header("2. Line Configuration")
 num_stations = st.sidebar.number_input("Number of Stations in Sequence", min_value=1, max_value=10, value=6)
 
 st.sidebar.divider()
+st.sidebar.header("3. Quality Parameters")
+scrap_rate_pct = st.sidebar.number_input("Scrap/Waste Rate per Station (%)", min_value=0.0, max_value=100.0, value=5.0, step=1.0)
+scrap_rate = scrap_rate_pct / 100.0
 
-font_size = 16
+st.sidebar.divider()
+st.sidebar.header("4. Scheduled Downtime")
+downtime_enabled = st.sidebar.checkbox("Simulate Periodic Downtime (Sanitation/Breaks)", value=False)
 
+downtime_interval = 0.0
+downtime_duration = 0.0
+
+if downtime_enabled:
+    with st.sidebar.expander("Schedule Settings", expanded=True):
+        st.write("Applies scheduled lockouts to simulate cleaning cycles or shift changes.")
+        downtime_interval = st.number_input(
+            "Time Between Scheduled Stops (min)", 
+            min_value=10.0, value=240.0, step=30.0,
+            help="e.g., 240 minutes = 4 hours of continuous production."
+        )
+        downtime_duration = st.number_input(
+            "Duration of Downtime (min)", 
+            min_value=1.0, value=30.0, step=5.0,
+            help="How long the station is offline during the event."
+        )
+
+# ----------------- MAIN BODY -----------------
 st.markdown(
     """
     <style>
@@ -126,7 +183,6 @@ st.markdown(
         font-family: var(--app-font-family);
         font-size: calc(var(--app-font-size) - 1px);
     }
-    
     /* Pulls the logo upward */
     [data-testid="column"]:nth-of-type(2) [data-testid="stImage"] {
         margin-top: -60px; 
@@ -136,19 +192,20 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Create two columns: a wide one for text (ratio 5), and a narrow one for the logo (ratio 1)
+# Create two columns: a wide one for text, and a narrow one for the logo
 header_col, logo_col = st.columns([6, 2])
 
 with header_col:
     st.title("Sequential Production Line Queuing Model")
     st.write("Configure a multi-station linear production flow below to evaluate capacity constraints and process metrics.")
-    st.write("Using mean times, input data into the individual stations in order to see process statistics")
+    st.write("Accounting for probabilistic food waste and scheduled sanitation/shift downtime.")
 
 with logo_col:
-    # Replace "your_logo.png" with the actual path to your image file, or a direct URL
-    st.image("Jack_Links_Logo.png", width=700)
+    # Optional: Replace with your actual logo file path if available
+    # st.image("Jack_Links_Logo.png", width=700)
+    pass
     
-# Pre-defined defaults matching your physical plant setup
+# Pre-defined defaults matching physical plant setup
 default_names = ["Grinder", "Stuffer", "Oven", "Cutter", "Packing Lines", "Box Lines"]
 default_servers = [1, 1, 2, 1, 3, 1]
 default_service_times = [1.5, 1.2, 3.0, 0.8, 4.5, 1.0]
@@ -160,7 +217,6 @@ st.write("Define server capacities and mean internal processing times for each p
 
 # Generate layout dynamically using columns
 for i in range(num_stations):
-    # Fallback to generic naming if user scales beyond the initial 6 default stations
     d_name = default_names[i] if i < len(default_names) else f"Station {i+1}"
     d_server = default_servers[i] if i < len(default_servers) else 1
     d_time = default_service_times[i] if i < len(default_service_times) else 2.0
@@ -181,10 +237,18 @@ for i in range(num_stations):
         })
     st.divider()
 
-# Execution and Reporting
+# ----------------- EXECUTION & REPORTING -----------------
 if st.button("Run Production Simulation", type="primary"):
     with st.spinner('Simulating processing line dynamics...'):
-        df_results = run_tandem_simulation(sim_time, arrival_mean, station_configs)
+        df_results = run_tandem_simulation(
+            sim_time, 
+            arrival_mean, 
+            station_configs, 
+            scrap_rate, 
+            downtime_enabled, 
+            downtime_interval, 
+            downtime_duration
+        )
         
         st.subheader("Output Performance Summary")
         st.dataframe(df_results, use_container_width=True, hide_index=True)
