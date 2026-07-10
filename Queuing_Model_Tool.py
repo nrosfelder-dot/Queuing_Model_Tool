@@ -159,18 +159,37 @@ st.markdown(
         font-family: var(--app-font-family);
         font-size: calc(var(--app-font-size) - 1px);
     }
+    /* Pulls the logo upward */
+    [data-testid="column"]:nth-of-type(2) [data-testid="stImage"] {
+        margin-top: -60px; 
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 # ----------------- MAIN BODY (Define Stations First) -----------------
+
+# Create two columns: a wide one for text, and a narrow one for the logo
+header_col, logo_col = st.columns([6, 2])
+
+with header_col:
+    st.title("Sequential Production Line Queuing Model")
+    st.write("Configure a multi-station linear production flow below to evaluate capacity constraints and process metrics.")
+    st.write("Accounting for probabilistic food waste and scheduled sanitation/shift downtime.")
+    # Added Limitations Dropdown
+with st.expander("Model Limitations"):
+    st.markdown("*This model assumes a steady state production after setup has been completed. Additionally, this serves as a model of the New Glarus plant and may be able to identify potential bottlenecks but more in depth data and observation is required before implementing actions. For more information about other assumptions or limitations please consult the pass down instructions.*")
+
+with logo_col:
+    # Optional: Replace with your actual logo file path if available
+    st.image("Jack_Links_Logo.png", width=700)
+    pass
+
 st.title("Sequential Production Line Queuing Model")
 st.write("Configure a multi-station linear production flow below to evaluate capacity constraints and process metrics.")
 
-# Added Limitations Dropdown
-with st.expander("Model Limitations"):
-    st.markdown("*This model assumes a steady state production after setup has been completed. Additionally, this serves as a model of the New Glarus plant and may be able to identify potential bottlenecks but more in depth data and observation is required before implementing actions. For more information about other assumptions or limitations please consult the pass down instructions.*")
+
     
 default_names = ["Grinder", "Stuffer", "Oven", "Cutter", "Packing Lines", "Box Lines"]
 default_servers = [1, 1, 2, 1, 3, 1]
