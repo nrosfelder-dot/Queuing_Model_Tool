@@ -236,4 +236,80 @@ for i, config in enumerate(station_configs):
                         dt_df.columns = dt_df.columns.str.strip()
                         
                         if 'Downtime Cause' in dt_df.columns and 'Down Time Occurences' in dt_df.columns and 'Total Mins' in dt_df.columns:
-                            dt_df = dt_
+                            dt_df = dt_df[dt_df['Down Time Occurences'] > 0]
+                            config["dt_causes"] = dt_df['Downtime Cause'].tolist()
+                            
+                            # Weight by occurrences
+                            config["dt_weights"] = (dt_df['Down Time Occurences'] / dt_df['Down Time Occurences'].sum()).tolist()
+                            
+                            # Specific MTTR per cause
+                            dt_df['Calculated_MTTR'] = dt_df['Total Mins'] / dt_df['Down Time Occurences']
+                            config["mttr_mapping"] = dict(zip(dt_df['Downtime Cause'], dt_df['Calculated_MTTR']))
+                            
+                            st.success(f"Successfully loaded {len(config['dt_causes'])} downtime causes.")
+                            
+                            prob_pct = st.number_input("Probability of Failure per Cycle (%)", min_value=0.1, max_value=100.0, value=3.0, step=0.1, key=f"dt_prob_{i}")
+                            config["breakdown_prob"] = prob_pct / 100.0
+                        else:
+                            st.error("CSV must contain 'Downtime Cause', 'Total Mins', and 'Down Time Occurences'.")
+                    except Exception as e:
+                        st.error(f"Error reading CSV: {e}")
+
+# ----------------- EXECUTION & REPORTING -----------------
+if st.button("Run Production Simulation", type="primary"):
+    with st.spinner('Simulating processing line dynamics...'):
+        df_results, df_breakdowns = run_tandem_simulation(sim_time, arrival_mean, station_configs, scrap_rate)
+        
+        st.subheader("Output Performance Summary")
+        st.dataframe(df_results, use_container_width=True, hide_index=True)
+
+        overutilized = df_results[df_results["Utilization (%)"] >= 100.0]
+        if not overutilized.empty:
+            for _, row in overutilized.iterrows():
+                st.error(f"**{row['Station Name']}** is completely bottlenecked (Utilization ≥ 100%). Downstream stations will starve, and upstream queues will grow infinitely.")
+
+        # Show Breakdown Analysis grouped by Station if data was generated
+        if not df_breakdowns.empty:
+            st.subheader("Unplanned Downtime Events Logged")
+            
+            # Aggregate breakdowns by Station and Cause
+            summary_dt = df_breakdowns.groupby(["Station", "Cause"]).agg(
+                Simulated_Occurrences=("Cause", "count"),
+                Total_Minutes_Lost=("Duration (min)", "sum")
+            ).reset_index().sort_values(by="Total_Minutes_Lost", ascending=False)
+            
+            summary_dt["Total_Minutes_Lost"] = summary_dt["Total_Minutes_Lost"].round(2)
+            
+            c1, c2 = st.columns([2, 3])
+            with c1:
+                st.dataframe(summary_dt, use_container_width=True, hide_index=True)
+            with c2:
+                # Built in stacked bar chart grouped by Station and colored by Station
+                st.bar_chart(data=summary_dt, x="Cause", y="Total_Minutes_Lost", color="Station")
+
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+            df_results.to_excel(writer, index=False, sheet_name='Line Performance Metrics')
+            if not df_breakdowns.empty:
+                df_breakdowns.to_excel(writer, index=False, sheet_name='Raw Breakdown Log')
+                summary_dt.to_excel(writer, index=False, sheet_name='Downtime Summary')
+            
+            workbook  = writer.book
+            worksheet = writer.sheets['Line Performance Metrics']
+            header_format = workbook.add_format({'bold': True, 'text_wrap': True, 'valign': 'vcenter', 'align': 'center', 'fg_color': '#111111', 'font_color': 'white', 'border': 1})
+            cell_format = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1})
+            alert_format = workbook.add_format({'bg_color': '#FFC7CE', 'font_color': '#9C0006', 'align': 'center', 'border': 1})
+
+            for col_num, value in enumerate(df_results.columns.values):
+                worksheet.write(0, col_num, value, header_format)
+            for i, col in enumerate(df_results.columns):
+                column_len = max(df_results[col].astype(str).map(len).max(), len(col)) + 4
+                worksheet.set_column(i, i, column_len, cell_format)
+            worksheet.conditional_format(1, 3, len(df_results), 3, {'type': 'cell', 'criteria': '>=', 'value': 85, 'format': alert_format})
+
+        st.download_button(
+            label="Export Styled Report to Excel",
+            data=buffer.getvalue(),
+            file_name="production_line_metrics.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
