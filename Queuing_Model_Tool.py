@@ -186,11 +186,6 @@ with logo_col:
     st.image("Jack_Links_Logo.png", width=700)
     pass
 
-st.title("Sequential Production Line Queuing Model")
-st.write("Configure a multi-station linear production flow below to evaluate capacity constraints and process metrics.")
-
-
-    
 default_names = ["Grinder", "Stuffer", "Oven", "Cutter", "Packing Lines", "Box Lines"]
 default_servers = [1, 1, 2, 1, 3, 1]
 default_service_times = [1.5, 1.2, 3.0, 0.8, 4.5, 1.0]
