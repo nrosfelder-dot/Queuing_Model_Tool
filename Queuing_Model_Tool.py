@@ -167,6 +167,10 @@ st.markdown(
 # ----------------- MAIN BODY (Define Stations First) -----------------
 st.title("Sequential Production Line Queuing Model")
 st.write("Configure a multi-station linear production flow below to evaluate capacity constraints and process metrics.")
+
+# Added Limitations Dropdown
+with st.expander("Model Limitations"):
+    st.markdown("*This model assumes a steady state production after setup has been completed. Additionally, this serves as a model of the New Glarus plant and may be able to identify potential bottlenecks but more in depth data and observation is required before implementing actions. For more information about other assumptions or limitations please consult the pass down instructions.*")
     
 default_names = ["Grinder", "Stuffer", "Oven", "Cutter", "Packing Lines", "Box Lines"]
 default_servers = [1, 1, 2, 1, 3, 1]
@@ -270,7 +274,7 @@ if st.button("Run Production Simulation", type="primary"):
 
         # Show Breakdown Analysis grouped by Station if data was generated
         if not df_breakdowns.empty:
-            st.subheader("Predicted Unplanned Downtime Events Logged for Simulation Runtime")
+            st.subheader("Unplanned Downtime Events Logged")
             
             # Aggregate breakdowns by Station and Cause
             summary_dt = df_breakdowns.groupby(["Station", "Cause"]).agg(
