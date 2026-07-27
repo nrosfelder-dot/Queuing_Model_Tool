@@ -267,7 +267,7 @@ def load_product_data(filepath):
     return pd.read_excel(filepath)
 
 try:
-    product_df = load_product_data("MasterData")
+    product_df = load_product_data("MasterData.xlsx")
     
     if 'Pack Number' in product_df.columns and 'Weight Per Truck' in product_df.columns:
         product_list = product_df['Pack Number'].astype(str).dropna().unique().tolist()
@@ -302,7 +302,7 @@ try:
         st.sidebar.error("The file must contain 'Pack Number' and 'Weight Per Truck' columns.")
         
 except Exception as e:
-    st.sidebar.error(f"Error loading Exported_Data_20260727.xlsx: {e}")
+    st.sidebar.error(f"Error loading MasterData.xlsx: {e}")
 
 st.sidebar.divider()
 st.sidebar.header("4. Per-Station Downtime")
