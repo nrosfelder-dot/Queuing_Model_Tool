@@ -98,11 +98,11 @@ class Station:
         return {
             "Station Name": self.name,
             "Servers Allocated": self.capacity,
-            "Units Processed": len(self.system_times),
+            "Trucks Processed": len(self.system_times),
             "Utilization (%)": round(utilization * 100, 2),
-            "Mean Time in Queue (min)": round(avg_queue, 2),
-            "Mean Time in Process (min)": round(avg_process, 2),
-            "Mean Total Time in System (min)": round(avg_system, 2)
+            "Mean Time Waiting (min)": round(avg_queue, 2),
+            "Mean Time in Processing (min)": round(avg_process, 2),
+            "Mean Total Time in Production System (min)": round(avg_system, 2)
         }
 
 def route_truck_through_line(env, truck_name, stations, scrap_rate, start_index):
