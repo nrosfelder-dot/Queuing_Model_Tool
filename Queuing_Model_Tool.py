@@ -232,7 +232,7 @@ def load_product_data(filepath):
 
 try:
     # Automatically load the file from the same directory as the script
-    product_df = load_product_data("Exported_Data_20260727.xlsx")
+    product_df = load_product_data("MasterData.xlsx")
     
     # Verify the necessary columns are present in the Excel file
     if 'Pack Number' in product_df.columns and 'Weight Per Truck' in product_df.columns:
@@ -272,7 +272,7 @@ try:
         
 except Exception as e:
     # Failsafe in case the file is missing from the folder or corrupted
-    st.sidebar.error(f"Error loading Exported_Data_20260727.xlsx: {e}")
+    st.sidebar.error(f"Error loading MasterData.xlsx: {e}")
 
 st.sidebar.divider()
 st.sidebar.header("4. Per-Station Downtime")
