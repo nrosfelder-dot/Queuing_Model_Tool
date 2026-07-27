@@ -4,6 +4,7 @@ import statistics
 import pandas as pd
 import streamlit as st
 import io
+import openpyxl
 
 # ==========================================
 # SIMULATION BACKEND (SimPy Tandem Line)
