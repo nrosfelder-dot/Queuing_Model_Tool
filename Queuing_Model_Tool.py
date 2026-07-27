@@ -267,7 +267,7 @@ def load_product_data(filepath):
     return pd.read_excel(filepath)
 
 try:
-    product_df = load_product_data("Exported_Data_20260727.xlsx")
+    product_df = load_product_data("MasterData")
     
     if 'Pack Number' in product_df.columns and 'Weight Per Truck' in product_df.columns:
         product_list = product_df['Pack Number'].astype(str).dropna().unique().tolist()
