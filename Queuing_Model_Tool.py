@@ -105,27 +105,56 @@ class Station:
             "Mean Total Time in System (min)": round(avg_system, 2)
         }
 
-def route_through_line(env, name, stations, scrap_rate):
-    """Sequentially routes the unit, applying a waste probability at each stage."""
-    for station in stations:
-        yield env.process(station.process_entity(name))
+def route_truck_through_line(env, truck_name, stations, scrap_rate, start_index):
+    """Routes an individual truck through the downstream stations."""
+    for i in range(start_index, len(stations)):
+        yield env.process(stations[i].process_entity(truck_name))
+        
+        # For individual trucks, we simulate probabilistic whole-truck QA rejection
         if random.random() < scrap_rate:
             break 
 
-def entity_generator(env, arrival_mean, stations, scrap_rate):
-    """Injects units into the front of the line."""
-    entity_count = 0
+def route_blend_through_line(env, blend_name, stations, scrap_rate, split_index, blend_size, truck_weight):
+    """Routes the blend through upstream stations, applies yield loss, then splits into trucks."""
+    # Start with the full initial batch weight
+    remaining_weight = blend_size
+    
+    # Phase 1: Process the Blend through the early stations (up to and including the split point)
+    for i in range(split_index + 1):
+        yield env.process(stations[i].process_entity(blend_name))
+        
+        # Deduct the scrap percentage from the physical weight at this station (continuous loss)
+        remaining_weight -= (remaining_weight * scrap_rate)
+            
+    # Phase 2: The split station has finished. Calculate trucks from the SURVIVING weight!
+    if truck_weight > 0:
+        # Divide the remaining weight by the target truck weight (rounded down to whole trucks)
+        num_trucks = int(remaining_weight // truck_weight) 
+    else:
+        num_trucks = 1  # Failsafe
+        
+    # Spawn a new independent process for each generated truck to flow downstream
+    for t in range(num_trucks):
+        truck_name = f"{blend_name}-Trk{t+1}"
+        env.process(route_truck_through_line(env, truck_name, stations, scrap_rate, split_index + 1))
+
+def entity_generator(env, arrival_mean, stations, scrap_rate, split_index, blend_size, truck_weight):
+    """Injects new Blends into the front of the line."""
+    blend_count = 0
     while True:
         yield env.timeout(random.expovariate(1.0 / arrival_mean))
-        entity_count += 1
-        env.process(route_through_line(env, f"Batch-{entity_count}", stations, scrap_rate))
+        blend_count += 1
+        env.process(route_blend_through_line(
+            env, f"Blend-{blend_count}", stations, scrap_rate, split_index, blend_size, truck_weight
+        ))
 
-def run_tandem_simulation(sim_time, arrival_mean, station_configs, scrap_rate):
+def run_tandem_simulation(sim_time, arrival_mean, station_configs, scrap_rate, split_index, blend_size, truck_weight):
     env = simpy.Environment()
     
     stations_list = [Station(env, config) for config in station_configs]
 
-    env.process(entity_generator(env, arrival_mean, stations_list, scrap_rate))
+    # Pass the new truck and blend math into the generator
+    env.process(entity_generator(env, arrival_mean, stations_list, scrap_rate, split_index, blend_size, truck_weight))
     env.run(until=sim_time)
 
     # Compile data
@@ -177,14 +206,13 @@ with header_col:
     st.title("Sequential Production Line Queuing Model")
     st.write("Configure a multi-station linear production flow below to evaluate capacity constraints and process metrics.")
     st.write("Accounting for probabilistic food waste and scheduled sanitation/shift downtime.")
-    # Added Limitations Dropdown
+    
 with st.expander("Model Limitations"):
     st.markdown("*This model assumes a steady state production after setup has been completed. Additionally, this serves as a model of the New Glarus plant and may be able to identify potential bottlenecks but more in depth data and observation is required before implementing actions. For more information about other assumptions or limitations please consult the pass down instructions.*")
 
 with logo_col:
     # Optional: Replace with your actual logo file path if available
     st.image("Jack_Links_Logo.png", width=700)
-    pass
 
 default_names = ["Grinder", "Stuffer", "Oven", "Cutter", "Packing Lines", "Box Lines"]
 default_servers = [1, 1, 2, 1, 3, 1]
@@ -209,7 +237,6 @@ for i in range(num_stations):
         with c3:
             svc_time = st.number_input("Mean Service Time (min)", min_value=0.05, value=d_time, step=0.1, format="%.2f", key=f"time_{i}")
         
-        # Build the baseline config. We will append the downtime settings in the sidebar loop.
         station_configs.append({"name": name, "capacity": servers, "service_time": svc_time})
     st.divider()
 
@@ -219,65 +246,67 @@ sim_time = st.sidebar.number_input("Simulation Run Time (minutes)", min_value=10
 arrival_mean = st.sidebar.number_input("Mean Time Between Material Arrivals (min)", min_value=0.1, value=2.0, step=0.1, format="%.2f")
 
 st.sidebar.divider()
-st.sidebar.header("2. Quality Parameters")
+st.sidebar.header("2. Quality & Batch Parameters")
 scrap_rate_pct = st.sidebar.number_input("Scrap/Waste Rate per Station (%)", min_value=0.0, max_value=100.0, value=5.0, step=1.0)
 scrap_rate = scrap_rate_pct / 100.0
 
+blend_size = st.sidebar.number_input("Average Blend Size (lbs)", min_value=100, value=3600, step=100)
+
+# Automatically list the stations the user created, and default to the second one (usually the Stuffer at index 1)
+station_names = [cfg["name"] for cfg in station_configs]
+split_station_name = st.sidebar.selectbox("Station that Loads the Trucks", options=station_names, index=min(1, len(station_names)-1))
+split_index = station_names.index(split_station_name)
+
 st.sidebar.divider()
 st.sidebar.header("3. Truck Loading Parameters")
+
+truck_weight_lbs = 0.0 
 
 @st.cache_data
 def load_product_data(filepath):
     return pd.read_excel(filepath)
 
 try:
-    # Automatically load the file from the same directory as the script
-    product_df = load_product_data("MasterData.xlsx")
+    product_df = load_product_data("Exported_Data_20260727.xlsx")
     
-    # Verify the necessary columns are present in the Excel file
     if 'Pack Number' in product_df.columns and 'Weight Per Truck' in product_df.columns:
-        
-        # Extract unique Pack Numbers as strings to populate the searchable dropdown
         product_list = product_df['Pack Number'].astype(str).dropna().unique().tolist()
         
-        # Create the searchable dropdown menu
         selected_product = st.sidebar.selectbox(
             "Select or Search Product Number", 
             options=product_list,
             help="Type to search for a specific Pack Number."
         )
         
-        # Locate the specific row associated with the chosen product number
         product_row = product_df[product_df['Pack Number'].astype(str) == selected_product].iloc[0]
-        
-        # Extract the Description and Weight Per Truck
         pack_description = product_row.get('Pack Description', 'No description available')
         weight_per_truck = product_row['Weight Per Truck']
         
-        # Display the product description for visual confirmation
         st.sidebar.write(f"**Item:** {pack_description}")
         
-        # Some rows in your sheet say "No matching records found.", so we must handle non-numeric text
         try:
-            # Attempt to convert the weight to a float for calculation purposes
             weight_val = float(weight_per_truck)
-            st.sidebar.success(f"**Calculated Weight Per Truck:** {weight_val:,.2f} lbs")
+            truck_weight_lbs = weight_val 
+            st.sidebar.success(f"**Calculated Target Weight:** {weight_val:,.2f} lbs")
+            
+            # Calculate the estimated weight remaining after scrap at the upstream stations
+            estimated_surviving_weight = blend_size * ((1.0 - scrap_rate) ** (split_index + 1))
+            estimated_trucks = int(estimated_surviving_weight // weight_val)
+            
+            st.sidebar.info(f"**Estimated Yield:** ~{estimated_trucks} trucks per blend (after {scrap_rate*100:.1f}% scrap loss at upstream stations)")
             
         except ValueError:
-            # If the cell contains text (like "No matching records found."), warn the user
             st.sidebar.warning(f"**Weight Per Truck:** {weight_per_truck}")
             
     else:
         st.sidebar.error("The file must contain 'Pack Number' and 'Weight Per Truck' columns.")
         
 except Exception as e:
-    # Failsafe in case the file is missing from the folder or corrupted
-    st.sidebar.error(f"Error loading MasterData.xlsx: {e}")
+    st.sidebar.error(f"Error loading Exported_Data_20260727.xlsx: {e}")
 
 st.sidebar.divider()
 st.sidebar.header("4. Per-Station Downtime")
 
-# Dynamically generate downtime controls for each station defined in the main window
 for i, config in enumerate(station_configs):
     with st.sidebar.expander(f"⚙️ Configure {config['name']}", expanded=False):
         dt_enabled = st.checkbox("Simulate Downtime", key=f"dt_en_{i}")
@@ -295,7 +324,6 @@ for i, config in enumerate(station_configs):
             elif dt_type == "Downtime Data Upload":
                 uploaded_csv = st.file_uploader(f"Upload Pareto CSV for {config['name']}", type=['csv'], key=f"dt_csv_{i}")
                 
-                # Default empty states
                 config["dt_causes"], config["dt_weights"], config["mttr_mapping"] = [], [], {}
                 config["breakdown_prob"] = 0.0
 
@@ -308,10 +336,8 @@ for i, config in enumerate(station_configs):
                             dt_df = dt_df[dt_df['Down Time Occurences'] > 0]
                             config["dt_causes"] = dt_df['Downtime Cause'].tolist()
                             
-                            # Weight by occurrences
                             config["dt_weights"] = (dt_df['Down Time Occurences'] / dt_df['Down Time Occurences'].sum()).tolist()
                             
-                            # Specific MTTR per cause
                             dt_df['Calculated_MTTR'] = dt_df['Total Mins'] / dt_df['Down Time Occurences']
                             config["mttr_mapping"] = dict(zip(dt_df['Downtime Cause'], dt_df['Calculated_MTTR']))
                             
@@ -327,9 +353,15 @@ for i, config in enumerate(station_configs):
 # ----------------- EXECUTION & REPORTING -----------------
 if st.button("Run Production Simulation", type="primary"):
     with st.spinner('Simulating processing line dynamics...'):
-        df_results, df_breakdowns = run_tandem_simulation(sim_time, arrival_mean, station_configs, scrap_rate)
+        df_results, df_breakdowns = run_tandem_simulation(
+            sim_time, arrival_mean, station_configs, scrap_rate, split_index, blend_size, truck_weight_lbs
+        )
         
         st.subheader("Output Performance Summary")
+        
+        # Add a helpful note to explain the shift in units to the user
+        st.caption(f"**Note:** 'Units Processed' reflects Blends upstream of the **{split_station_name}**, and individual Trucks downstream.")
+        
         st.dataframe(df_results, use_container_width=True, hide_index=True)
 
         overutilized = df_results[df_results["Utilization (%)"] >= 100.0]
@@ -337,11 +369,9 @@ if st.button("Run Production Simulation", type="primary"):
             for _, row in overutilized.iterrows():
                 st.error(f"**{row['Station Name']}** is completely bottlenecked (Utilization ≥ 100%). Downstream stations will starve, and upstream queues will grow infinitely.")
 
-        # Show Breakdown Analysis grouped by Station if data was generated
         if not df_breakdowns.empty:
             st.subheader("Unplanned Downtime Events Logged")
             
-            # Aggregate breakdowns by Station and Cause
             summary_dt = df_breakdowns.groupby(["Station", "Cause"]).agg(
                 Simulated_Occurrences=("Cause", "count"),
                 Total_Minutes_Lost=("Duration (min)", "sum")
@@ -353,7 +383,6 @@ if st.button("Run Production Simulation", type="primary"):
             with c1:
                 st.dataframe(summary_dt, use_container_width=True, hide_index=True)
             with c2:
-                # Built in stacked bar chart grouped by Station and colored by Station
                 st.bar_chart(data=summary_dt, x="Cause", y="Total_Minutes_Lost", color="Station")
 
         buffer = io.BytesIO()
