@@ -98,7 +98,7 @@ class Station:
         return {
             "Station Name": self.name,
             "Servers Allocated": self.capacity,
-            "Trucks Processed": len(self.system_times),
+            "Units Processed": len(self.system_times),
             "Utilization (%)": round(utilization * 100, 2),
             "Mean Time Waiting (min)": round(avg_queue, 2),
             "Mean Time in Processing (min)": round(avg_process, 2),
@@ -138,23 +138,27 @@ def route_blend_through_line(env, blend_name, stations, scrap_rate, split_index,
         truck_name = f"{blend_name}-Trk{t+1}"
         env.process(route_truck_through_line(env, truck_name, stations, scrap_rate, split_index + 1))
 
-def entity_generator(env, arrival_mean, stations, scrap_rate, split_index, blend_size, truck_weight):
-    """Injects new Blends into the front of the line."""
+def entity_generator(env, arrival_mean, stations, scrap_rate, split_index, blend_size, truck_weight, target_blends):
+    """Injects new Blends into the front of the line until the target is met."""
     blend_count = 0
     while True:
+        # Stop spawning if we reached our target blends
+        if target_blends is not None and blend_count >= target_blends:
+            break
+            
         yield env.timeout(random.expovariate(1.0 / arrival_mean))
         blend_count += 1
         env.process(route_blend_through_line(
             env, f"Blend-{blend_count}", stations, scrap_rate, split_index, blend_size, truck_weight
         ))
 
-def run_tandem_simulation(sim_time, arrival_mean, station_configs, scrap_rate, split_index, blend_size, truck_weight):
+def run_tandem_simulation(sim_time, arrival_mean, station_configs, scrap_rate, split_index, blend_size, truck_weight, target_blends):
     env = simpy.Environment()
     
     stations_list = [Station(env, config) for config in station_configs]
 
-    # Pass the new truck and blend math into the generator
-    env.process(entity_generator(env, arrival_mean, stations_list, scrap_rate, split_index, blend_size, truck_weight))
+    # Pass the target_blends limit into the generator
+    env.process(entity_generator(env, arrival_mean, stations_list, scrap_rate, split_index, blend_size, truck_weight, target_blends))
     env.run(until=sim_time)
 
     # Compile data
@@ -244,6 +248,12 @@ for i in range(num_stations):
 st.sidebar.header("1. Global Parameters")
 sim_time = st.sidebar.number_input("Simulation Run Time (minutes)", min_value=100, value=10000, step=1000)
 arrival_mean = st.sidebar.number_input("Mean Time Between Material Arrivals (min)", min_value=0.1, value=2.0, step=0.1, format="%.2f")
+
+use_target_blends = st.sidebar.checkbox("Enable Target Blends (Daily Quota)", value=False)
+target_blends = None
+if use_target_blends:
+    target_blends = st.sidebar.number_input("Target Blends per Simulation Run", min_value=1, value=20, step=1)
+    st.sidebar.caption(f"The simulation will stop generating new material after {target_blends} blends, but will continue processing remaining queues until the run time limit.")
 
 st.sidebar.divider()
 st.sidebar.header("2. Quality & Batch Parameters")
@@ -354,7 +364,7 @@ for i, config in enumerate(station_configs):
 if st.button("Run Production Simulation", type="primary"):
     with st.spinner('Simulating processing line dynamics...'):
         df_results, df_breakdowns = run_tandem_simulation(
-            sim_time, arrival_mean, station_configs, scrap_rate, split_index, blend_size, truck_weight_lbs
+            sim_time, arrival_mean, station_configs, scrap_rate, split_index, blend_size, truck_weight_lbs, target_blends
         )
         
         st.subheader("Output Performance Summary")
