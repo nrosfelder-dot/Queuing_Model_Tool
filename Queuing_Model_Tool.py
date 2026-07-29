@@ -244,7 +244,7 @@ for i in range(num_stations):
         with c2:
             servers = st.number_input("Active Servers / Lines", min_value=1, value=d_server, key=f"srv_{i}")
         with c3:
-            svc_time = st.number_input("Mean Service Time (min)", min_value=0.05, value=d_time, step=0.1, format="%.2f", key=f"time_{i}")
+            svc_time = st.number_input("Mean Service Time (min)", min_value=0.05, value=float(d_time), step=0.1, format="%.2f", key=f"time_{i}")
         
         station_configs.append({"name": name, "capacity": servers, "service_time": svc_time})
     st.divider()
