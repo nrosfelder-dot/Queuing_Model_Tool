@@ -225,7 +225,7 @@ with logo_col:
 
 default_names = ["Grinder", "Stuffer", "Oven", "Cutter", "Packing Lines", "Box Lines"]
 default_servers = [1, 1, 2, 1, 3, 1]
-default_service_times = [1.5, 1.2, 3.0, 0.8, 4.5, 1.0]
+default_service_times = [45, 60, 600, 60, 60, 60]
 
 station_configs = []
 
