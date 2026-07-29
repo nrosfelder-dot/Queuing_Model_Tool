@@ -35,6 +35,7 @@ class Station:
         self.process_times = []
         self.system_times = []
         self.total_busy_time = 0.0
+        self.total_weight_processed = 0.0  # Track total pounds through this station
         self.breakdown_log = []
 
         # Start the background scheduled downtime clock if "Assumed Downtime" is chosen
@@ -49,7 +50,7 @@ class Station:
                 yield request
                 yield self.env.timeout(self.dt_duration)
 
-    def process_entity(self, entity_name):
+    def process_entity(self, entity_name, weight=0.0):
         arrival_time = self.env.now
 
         with self.server.request() as request:
@@ -58,6 +59,9 @@ class Station:
             start_service_time = self.env.now
             queue_time = start_service_time - arrival_time
             self.queue_times.append(queue_time)
+            
+            # Log the weight processed at this station
+            self.total_weight_processed += weight
 
             # Normal Processing Time
             service_time = random.expovariate(1.0 / self.mean_service_time)
@@ -99,16 +103,17 @@ class Station:
             "Station Name": self.name,
             "Servers Allocated": self.capacity,
             "Units Processed": len(self.system_times),
+            "Total Pounds Processed": round(self.total_weight_processed, 2),
             "Utilization (%)": round(utilization * 100, 2),
             "Mean Time Waiting (min)": round(avg_queue, 2),
             "Mean Time in Processing (min)": round(avg_process, 2),
             "Mean Total Time in Production System (min)": round(avg_system, 2)
         }
 
-def route_truck_through_line(env, truck_name, stations, scrap_rate, start_index):
+def route_truck_through_line(env, truck_name, stations, scrap_rate, start_index, truck_weight):
     """Routes an individual truck through the downstream stations."""
     for i in range(start_index, len(stations)):
-        yield env.process(stations[i].process_entity(truck_name))
+        yield env.process(stations[i].process_entity(truck_name, weight=truck_weight))
         
         # For individual trucks, we simulate probabilistic whole-truck QA rejection
         if random.random() < scrap_rate:
@@ -121,7 +126,7 @@ def route_blend_through_line(env, blend_name, stations, scrap_rate, split_index,
     
     # Phase 1: Process the Blend through the early stations (up to and including the split point)
     for i in range(split_index + 1):
-        yield env.process(stations[i].process_entity(blend_name))
+        yield env.process(stations[i].process_entity(blend_name, weight=remaining_weight))
         
         # Deduct the scrap percentage from the physical weight at this station (continuous loss)
         remaining_weight -= (remaining_weight * scrap_rate)
@@ -136,7 +141,7 @@ def route_blend_through_line(env, blend_name, stations, scrap_rate, split_index,
     # Spawn a new independent process for each generated truck to flow downstream
     for t in range(num_trucks):
         truck_name = f"{blend_name}-Trk{t+1}"
-        env.process(route_truck_through_line(env, truck_name, stations, scrap_rate, split_index + 1))
+        env.process(route_truck_through_line(env, truck_name, stations, scrap_rate, split_index + 1, truck_weight))
 
 def entity_generator(env, arrival_mean, stations, scrap_rate, split_index, blend_size, truck_weight, target_blends):
     """Injects new Blends into the front of the line until the target is met."""
@@ -279,17 +284,19 @@ def load_product_data(filepath):
 try:
     product_df = load_product_data("MasterData.xlsx")
     
-    if 'Pack Number' in product_df.columns and 'Weight Per Truck' in product_df.columns:
-        product_list = product_df['Pack Number'].astype(str).dropna().unique().tolist()
+    # Changed from 'Pack Number' to 'Blend Number'
+    if 'Blend Number' in product_df.columns and 'Weight Per Truck' in product_df.columns:
+        product_list = product_df['Blend Number'].astype(str).dropna().unique().tolist()
         
         selected_product = st.sidebar.selectbox(
-            "Select or Search Product Number", 
+            "Select or Search Blend Number", 
             options=product_list,
-            help="Type to search for a specific Pack Number."
+            help="Type to search for a specific Blend Number."
         )
         
-        product_row = product_df[product_df['Pack Number'].astype(str) == selected_product].iloc[0]
-        pack_description = product_row.get('Pack Description', 'No description available')
+        product_row = product_df[product_df['Blend Number'].astype(str) == selected_product].iloc[0]
+        # Changed to fetch 'Blend Description'
+        pack_description = product_row.get('Blend Description', 'No description available')
         weight_per_truck = product_row['Weight Per Truck']
         
         st.sidebar.write(f"**Item:** {pack_description}")
@@ -309,7 +316,7 @@ try:
             st.sidebar.warning(f"**Weight Per Truck:** {weight_per_truck}")
             
     else:
-        st.sidebar.error("The file must contain 'Pack Number' and 'Weight Per Truck' columns.")
+        st.sidebar.error("The file must contain 'Blend Number' and 'Weight Per Truck' columns.")
         
 except Exception as e:
     st.sidebar.error(f"Error loading MasterData.xlsx: {e}")
@@ -413,7 +420,9 @@ if st.button("Run Production Simulation", type="primary"):
             for i, col in enumerate(df_results.columns):
                 column_len = max(df_results[col].astype(str).map(len).max(), len(col)) + 4
                 worksheet.set_column(i, i, column_len, cell_format)
-            worksheet.conditional_format(1, 3, len(df_results), 3, {'type': 'cell', 'criteria': '>=', 'value': 85, 'format': alert_format})
+            
+            # Adjusted conditional formatting column index to 4 to match "Utilization (%)" after adding the new Pounds Processed column
+            worksheet.conditional_format(1, 4, len(df_results), 4, {'type': 'cell', 'criteria': '>=', 'value': 85, 'format': alert_format})
 
         st.download_button(
             label="Export Styled Report to Excel",
