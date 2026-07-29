@@ -224,7 +224,7 @@ with logo_col:
     st.image("Jack_Links_Logo.png", width=700)
 
 default_names = ["Grinder", "Stuffer", "Oven", "Cutter", "Packing Lines", "Box Lines"]
-default_servers = [1, 1, 2, 1, 3, 1]
+default_servers = [1, 5, 14, 1, 3, 3]
 default_service_times = [45, 60, 600, 60, 60, 60]
 
 station_configs = []
