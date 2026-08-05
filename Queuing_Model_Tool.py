@@ -344,7 +344,7 @@ try:
         
         # Cut Specs Check
         if 'Sticks Per Truck' in product_df.columns:
-            sticks_val = product_row.get('Sticks/Truck')
+            sticks_val = product_row.get('Sticks/ Truck')
             if pd.notna(sticks_val):
                 sticks_per_truck = int(sticks_val)
                 st.sidebar.success(f"**Cut Spec:** {sticks_per_truck} sections/sticks per truck.")
