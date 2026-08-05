@@ -343,7 +343,7 @@ try:
             cook_weight_lbs = st.sidebar.number_input("Cooked Truck Weight (lbs exiting Oven)", value=kitchen_weight_lbs * 0.8)
         
         # Cut Specs Check
-        if 'Sticks Per Truck' in product_df.columns:
+        if 'Sticks/ Truck' in product_df.columns:
             sticks_val = product_row.get('Sticks/ Truck')
             if pd.notna(sticks_val):
                 sticks_per_truck = int(sticks_val)
