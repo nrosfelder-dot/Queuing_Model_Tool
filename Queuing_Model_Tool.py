@@ -332,9 +332,9 @@ try:
         st.sidebar.write(f"**Item:** {pack_description}")
         
         # Attempt to pull Kitchen/Cook weights if they exist, otherwise fallback to generic 'Weight Per Truck'
-        if 'Kitchen Weight' in product_df.columns and 'Cook Weight' in product_df.columns:
+        if 'Kitchen Weight' in product_df.columns and 'Ck Weight' in product_df.columns:
             kitchen_weight_lbs = float(product_row['Kitchen Weight'])
-            cook_weight_lbs = float(product_row['Cook Weight'])
+            cook_weight_lbs = float(product_row['Ck Weight'])
             st.sidebar.success(f"**Loaded Weights:** Kitchen {kitchen_weight_lbs} lbs | Cook {cook_weight_lbs} lbs")
         elif 'Weight Per Truck' in product_df.columns:
             kitchen_weight_lbs = float(product_row['Weight Per Truck'])
@@ -344,7 +344,7 @@ try:
         
         # Cut Specs Check
         if 'Sticks Per Truck' in product_df.columns:
-            sticks_val = product_row.get('Sticks Per Truck')
+            sticks_val = product_row.get('Sticks/Truck')
             if pd.notna(sticks_val):
                 sticks_per_truck = int(sticks_val)
                 st.sidebar.success(f"**Cut Spec:** {sticks_per_truck} sections/sticks per truck.")
