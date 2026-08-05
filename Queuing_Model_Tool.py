@@ -322,12 +322,13 @@ def load_product_data(filepath):
 try:
     product_df = load_product_data("MasterData.xlsx")
     
-    if 'Blend Number' in product_df.columns:
-        product_list = product_df['Blend Number'].astype(str).dropna().unique().tolist()
-        selected_product = st.sidebar.selectbox("Select or Search Blend Number", options=product_list)
-        product_row = product_df[product_df['Blend Number'].astype(str) == selected_product].iloc[0]
+    # --- UPDATED TO USE 'Pack Number' INSTEAD OF 'Blend Number' ---
+    if 'Pack Number' in product_df.columns:
+        product_list = product_df['Pack Number'].astype(str).dropna().unique().tolist()
+        selected_product = st.sidebar.selectbox("Select or Search Pack Number", options=product_list)
+        product_row = product_df[product_df['Pack Number'].astype(str) == selected_product].iloc[0]
         
-        pack_description = product_row.get('Blend Description', 'No description available')
+        pack_description = product_row.get('Pack Description', 'No description available')
         st.sidebar.write(f"**Item:** {pack_description}")
         
         # Attempt to pull Kitchen/Cook weights if they exist, otherwise fallback to generic 'Weight Per Truck'
@@ -353,7 +354,7 @@ try:
             sticks_per_truck = st.sidebar.number_input("Manual Input: Sections/Sticks per Truck", min_value=1, value=120, step=10)
             
     else:
-        st.sidebar.error("MasterData.xlsx missing required columns.")
+        st.sidebar.error("MasterData.xlsx missing required columns ('Pack Number').")
 except Exception as e:
     st.sidebar.error("Could not load MasterData.xlsx. Proceeding with manual inputs.")
     kitchen_weight_lbs = st.sidebar.number_input("Kitchen Truck Weight (lbs entering Oven)", value=500.0)
@@ -419,7 +420,7 @@ if st.button("Run Production Simulation", type="primary"):
         overutilized = df_results[df_results["Utilization (%)"] >= 100.0]
         if not overutilized.empty:
             for _, row in overutilized.iterrows():
-                st.error(f"⚠️ **{row['Station Name']}** is completely bottlenecked (Utilization ≥ 100%).")
+                st.error(f"{row['Station Name']}** is completely bottlenecked (Utilization ≥ 100%).")
 
         if not df_breakdowns.empty:
             st.subheader("Unplanned Downtime Events Logged")
